@@ -2,7 +2,7 @@ package index
 
 import (
 	"github.com/google/btree"
-	"kv_memory/bitcask-go/data"
+	"kv_memory/data"
 	"sync"
 )
 

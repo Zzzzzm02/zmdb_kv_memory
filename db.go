@@ -1,18 +1,18 @@
-package bitcask_go
+package kv_memory
 
 import (
-	"kv_memory/bitcask-go/data"
-	"kv_memory/bitcask-go/index"
+	data2 "kv_memory/data"
+	"kv_memory/index"
 	"sync"
 )
 
 // DB 存储引擎实例
 type DB struct {
-	options    Options                   // 用户配置选项
-	mu         *sync.RWMutex             // 锁
-	activeFile *data.DataFile            // 当前活跃数据文件, 可以用于写入
-	olderFiles map[uint32]*data.DataFile // 旧的数据文件, 只能用于读
-	index      index.Indexer             // 内存索引
+	options    Options                    // 用户配置选项
+	mu         *sync.RWMutex              // 锁
+	activeFile *data2.DataFile            // 当前活跃数据文件, 可以用于写入
+	olderFiles map[uint32]*data2.DataFile // 旧的数据文件, 只能用于读
+	index      index.Indexer              // 内存索引
 }
 
 // Put 这个方法写入 key/value 数据, key 不能为空
@@ -23,10 +23,10 @@ func (db *DB) Put(key []byte, value []byte) error {
 	}
 
 	// 构造 LogRecord 结构体
-	logRecord := &data.LogRecord{
+	logRecord := &data2.LogRecord{
 		Key:   key,
 		Value: value,
-		Type:  data.LogRecordNormal,
+		Type:  data2.LogRecordNormal,
 	}
 
 	// appendLogRecord 方法会返回一个索引位置 *data.LogRecordPos
@@ -43,7 +43,7 @@ func (db *DB) Put(key []byte, value []byte) error {
 }
 
 // 追加写数据到活跃文件中
-func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
+func (db *DB) appendLogRecord(logRecord *data2.LogRecord) (*data2.LogRecordPos, error) {
 	// 先加锁
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -56,7 +56,7 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 	}
 
 	// 写入数据编码
-	encRecord, size := data.EncodeLogRecord(logRecord)
+	encRecord, size := data2.EncodeLogRecord(logRecord)
 
 	// 如果写入的数据已经到达了活跃文件的阈值, 则关闭活跃文件, 并打开新的文件
 	if db.activeFile.WriteOff+size > db.options.DataFileSize {
@@ -88,7 +88,7 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 	}
 
 	// 构造一个内存索引的信息, 并返回
-	pos := &data.LogRecordPos{Fid: db.activeFile.FileId, Offset: writeOff}
+	pos := &data2.LogRecordPos{Fid: db.activeFile.FileId, Offset: writeOff}
 	return pos, nil
 
 }
@@ -106,7 +106,7 @@ func (db *DB) setActiveDataFile() error {
 	// 每个数据文件在创建的时候, Id 都是递增的
 
 	// 打开新的数据文件, 需要传一个目录
-	dataFile, err := data.OpenDataFile(db.options.DirPath, initialFileId)
+	dataFile, err := data2.OpenDataFile(db.options.DirPath, initialFileId)
 	if err != nil {
 		return err
 	}

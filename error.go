@@ -1,4 +1,4 @@
-package bitcask_go
+package kv_memory
 
 import "errors"
 

@@ -1,4 +1,4 @@
-package bitcask_go
+package kv_memory
 
 // Options 用户的可配置项
 type Options struct {

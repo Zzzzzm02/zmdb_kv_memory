@@ -1,6 +1,8 @@
 package data
 
-import "kv_memory/bitcask-go/fio"
+import (
+	"kv_memory/fio"
+)
 
 // DataFile 数据文件结构
 type DataFile struct {

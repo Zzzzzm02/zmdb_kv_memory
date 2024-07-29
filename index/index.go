@@ -3,7 +3,7 @@ package index
 import (
 	"bytes"
 	"github.com/google/btree"
-	"kv_memory/bitcask-go/data"
+	"kv_memory/data"
 )
 
 // Indexer 定义抽象索引接口1, 后续如果想实现其它数据结构索引就实现这个接口就行
