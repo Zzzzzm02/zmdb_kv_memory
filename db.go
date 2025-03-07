@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-// DB 存储引擎实例
+// DB 存储引擎实例 数据库引擎实例
 type DB struct {
 	options    Options                    // 用户配置选项
 	mu         *sync.RWMutex              // 锁
