@@ -1,6 +1,7 @@
 package kv_memory
 
 import (
+	"errors"
 	data2 "kv_memory/data"
 	"kv_memory/index"
 	"sync"
@@ -13,6 +14,17 @@ type DB struct {
 	activeFile *data2.DataFile            // 当前活跃数据文件, 可以用于写入
 	olderFiles map[uint32]*data2.DataFile // 旧的数据文件, 只能用于读
 	index      index.Indexer              // 内存索引
+}
+
+// open 打开 bitcask 存储引擎实例
+func open(opt Options) (*DB, error) {
+	// 首先调用函数检查用户配置项
+	if err := checkOptions(opt); err != nil {
+		return nil, err
+	}
+
+	// 然后是加载数据文件
+
 }
 
 // Put 这个方法写入 key/value 数据, key 不能为空
@@ -111,5 +123,21 @@ func (db *DB) setActiveDataFile() error {
 		return err
 	}
 	db.activeFile = dataFile
+	return nil
+}
+
+// checkOptions 检查用户配置项是否有错，无错返回 nil
+func checkOptions(opt Options) error {
+
+	// 检查用户传进来的数据库目录是否为空
+	if opt.DirPath == "" {
+		return errors.New("database DirPath is empty")
+	}
+
+	// 检查文件大小数值合法
+	if opt.DataFileSize <= 0 {
+		return errors.New("database DataFileSize must be greeter than 0")
+	}
+
 	return nil
 }

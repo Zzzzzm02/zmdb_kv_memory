@@ -2,6 +2,7 @@ package data
 
 type LogRecordType = byte
 
+// 表示是否数据已经删除
 const (
 	LogRecordNormal LogRecordType = iota
 	LogRecordDeleted

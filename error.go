@@ -6,4 +6,5 @@ import "errors"
 var (
 	ErrKeyIsEmpty        = errors.New("the key is empty")
 	ErrIndexUpdateFailed = errors.New("cannot update the index")
+	ErrDirIsEmpty        = errors.New("the directory is empty")
 )
