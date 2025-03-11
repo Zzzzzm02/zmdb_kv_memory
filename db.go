@@ -2,6 +2,7 @@ package kv_memory
 
 import (
 	"errors"
+	"io"
 	"kv_memory/data"
 	"kv_memory/index"
 	"os"
@@ -48,12 +49,61 @@ func open(opt Options) (*DB, error) {
 	}
 
 	// 然后是对索引的处理
+	if err := db.loadIndexFromDataFiles(); err != nil {
+		return nil, err
+	}
+	// 全部完成
+	return db, nil
 }
 
 // 从数据文件中加载索引
 // 遍历文件中的所有记录，并更新到内存索引中
 func (db *DB) loadIndexFromDataFiles() error {
+	// 如果文件数量长度为零，说明不用创建索引
+	if len(db.fileIds) == 0 {
+		return nil
+	}
 
+	// 遍历所有的文件id，处理所有的文件记录
+	for i, fid := range db.fileIds {
+		var fileId = uint32(fid)
+
+		var dataFile *data.DataFile
+		// 拿到当前活跃的文件
+		if fileId == db.activeFile.FileId {
+			dataFile = db.activeFile
+		} else {
+			dataFile = db.olderFiles[fileId]
+		}
+
+		var offset int64 = 0
+		for {
+
+			logRecord, size, err := dataFile.ReadLogRecord(offset)
+			if err != nil {
+				if err == io.EOF {
+					// 正常结束需跳出循环
+					break
+				}
+				return err
+			}
+			// 拿到 logRecord 之后，就要构造内存索引并保存
+			logRecordPos := &data.LogRecordPos{Fid: fileId, Offset: offset}
+			if logRecord.Type == data.LogRecordDeleted {
+				db.index.Delete(logRecord.Key)
+			} else {
+				db.index.Put(logRecord.Key, logRecordPos)
+			}
+
+			// 递增 offset 下一次从新的位置开始
+			offset += size
+		}
+		// 如果是当前活跃文件，需要更新 WriteOff
+		if i == len(db.fileIds)-1 {
+			db.activeFile.WriteOff = offset
+		}
+	}
+	return nil
 }
 
 // Put 这个方法写入 key/value 数据, key 不能为空

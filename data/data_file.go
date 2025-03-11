@@ -29,3 +29,8 @@ func (df *DataFile) Write(buf []byte) error {
 	return nil
 	// 待实现
 }
+
+func (df *DataFile) ReadLogRecord(offset int64) (*LogRecord, int64, error) {
+	return nil, 0, nil
+	// TODO
+}
