@@ -4,7 +4,9 @@ import "errors"
 
 // 自定义error类型
 var (
-	ErrKeyIsEmpty        = errors.New("the key is empty")
-	ErrIndexUpdateFailed = errors.New("cannot update the index")
-	ErrDirIsEmpty        = errors.New("the directory is empty")
+	ErrKeyIsEmpty             = errors.New("the key is empty")
+	ErrIndexUpdateFailed      = errors.New("cannot update the index")
+	ErrKeyNotFound            = errors.New("key not found")
+	ErrDatafileNotFound       = errors.New("datafile not found")
+	ErrDataDirectorycorrupted = errors.New("data directory corrupted")
 )

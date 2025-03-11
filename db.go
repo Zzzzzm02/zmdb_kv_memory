@@ -2,18 +2,23 @@ package kv_memory
 
 import (
 	"errors"
-	data2 "kv_memory/data"
+	"kv_memory/data"
 	"kv_memory/index"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 )
 
 // DB 存储引擎实例
 type DB struct {
-	options    Options                    // 用户配置选项
-	mu         *sync.RWMutex              // 锁
-	activeFile *data2.DataFile            // 当前活跃数据文件, 可以用于写入
-	olderFiles map[uint32]*data2.DataFile // 旧的数据文件, 只能用于读
-	index      index.Indexer              // 内存索引
+	options    Options                   // 用户配置选项
+	mu         *sync.RWMutex             // 锁
+	activeFile *data.DataFile            // 当前活跃数据文件, 可以用于写入
+	fileIds    []int                     // 文件 id ， 只能在加载索引的时候使用，不能用于其他地方
+	olderFiles map[uint32]*data.DataFile // 旧的数据文件, 只能用于读
+	index      index.Indexer             // 内存索引
 }
 
 // open 打开 bitcask 存储引擎实例
@@ -23,7 +28,31 @@ func open(opt Options) (*DB, error) {
 		return nil, err
 	}
 
-	// 然后是加载数据文件
+	// 然后是校验目录是否存在，如不存在就创建新目录
+	if _, err := os.Stat(opt.DirPath); err == nil {
+		if err := os.MkdirAll(opt.DirPath, os.ModePerm); err != nil {
+			return nil, err
+		}
+	}
+
+	//  初始化db实例结构体
+	db := &DB{
+		options:    opt,                             // 用户配置选项
+		mu:         &sync.RWMutex{},                 // 锁
+		olderFiles: make(map[uint32]*data.DataFile), // 旧的数据文件, 只能用于读
+		index:      index.NewIndexer(opt.IndexType), // 内存索引
+	}
+	// 加载数据文件
+	if err := db.loadDataFiles(); err != nil {
+		return nil, err
+	}
+
+	// 然后是对索引的处理
+}
+
+// 从数据文件中加载索引
+// 遍历文件中的所有记录，并更新到内存索引中
+func (db *DB) loadIndexFromDataFiles() error {
 
 }
 
@@ -35,10 +64,10 @@ func (db *DB) Put(key []byte, value []byte) error {
 	}
 
 	// 构造 LogRecord 结构体
-	logRecord := &data2.LogRecord{
+	logRecord := &data.LogRecord{
 		Key:   key,
 		Value: value,
-		Type:  data2.LogRecordNormal,
+		Type:  data.LogRecordNormal,
 	}
 
 	// appendLogRecord 方法会返回一个索引位置 *data.LogRecordPos
@@ -55,7 +84,7 @@ func (db *DB) Put(key []byte, value []byte) error {
 }
 
 // 追加写数据到活跃文件中
-func (db *DB) appendLogRecord(logRecord *data2.LogRecord) (*data2.LogRecordPos, error) {
+func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
 	// 先加锁
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -68,7 +97,7 @@ func (db *DB) appendLogRecord(logRecord *data2.LogRecord) (*data2.LogRecordPos, 
 	}
 
 	// 写入数据编码
-	encRecord, size := data2.EncodeLogRecord(logRecord)
+	encRecord, size := data.EncodeLogRecord(logRecord)
 
 	// 如果写入的数据已经到达了活跃文件的阈值, 则关闭活跃文件, 并打开新的文件
 	if db.activeFile.WriteOff+size > db.options.DataFileSize {
@@ -100,7 +129,7 @@ func (db *DB) appendLogRecord(logRecord *data2.LogRecord) (*data2.LogRecordPos, 
 	}
 
 	// 构造一个内存索引的信息, 并返回
-	pos := &data2.LogRecordPos{Fid: db.activeFile.FileId, Offset: writeOff}
+	pos := &data.LogRecordPos{Fid: db.activeFile.FileId, Offset: writeOff}
 	return pos, nil
 
 }
@@ -118,11 +147,51 @@ func (db *DB) setActiveDataFile() error {
 	// 每个数据文件在创建的时候, Id 都是递增的
 
 	// 打开新的数据文件, 需要传一个目录
-	dataFile, err := data2.OpenDataFile(db.options.DirPath, initialFileId)
+	dataFile, err := data.OpenDataFile(db.options.DirPath, initialFileId)
 	if err != nil {
 		return err
 	}
 	db.activeFile = dataFile
+	return nil
+}
+
+// loadDataFiles 从磁盘中加载数据文件
+func (db *DB) loadDataFiles() error {
+	dirEntries, err := os.ReadDir(db.options.DirPath)
+	if err != nil {
+		return err
+	}
+	var fileIds []int
+
+	// 遍历目录中的所有文件，找到所有以 .data 结尾的文件
+	for _, entry := range dirEntries {
+		if strings.HasSuffix(entry.Name(), data.DataFileNameSuffix) {
+			splitNames := strings.Split(entry.Name(), ".")
+			fileId, err := strconv.Atoi(splitNames[0])
+			// 数据目录可能被损坏了
+			if err != nil {
+				return ErrDataDirectorycorrupted
+			}
+			fileIds = append(fileIds, fileId)
+		}
+	}
+	// 对文件ID进行排序，从小到大依次加载
+	sort.Ints(fileIds)
+
+	// 排序之后，赋值到实例参数里面
+	db.fileIds = fileIds
+	// 遍历每个ID，依次打开数据文件
+	for i, fileId := range fileIds {
+		dataFile, err := data.OpenDataFile(db.options.DirPath, uint32(fileId))
+		if err != nil {
+			return err
+		}
+		if i == len(fileIds)-1 { // 最后一个，ID是最大的，说明是当前活跃文件
+			db.activeFile = dataFile
+		} else { // 说明是旧的数据文件
+			db.olderFiles[uint32(fileId)] = dataFile
+		}
+	}
 	return nil
 }
 
