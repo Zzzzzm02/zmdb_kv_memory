@@ -22,8 +22,8 @@ type DB struct {
 	index      index.Indexer             // 内存索引
 }
 
-// open 打开 bitcask 存储引擎实例
-func open(opt Options) (*DB, error) {
+// Open 打开 bitcask 存储引擎实例
+func Open(opt Options) (*DB, error) {
 	// 首先调用函数检查用户配置项
 	if err := checkOptions(opt); err != nil {
 		return nil, err
